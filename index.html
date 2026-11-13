@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MyShout</title>
+<meta name="description" content="See whose shout it is, and get the MyShout app.">
+<link rel="icon" href="icon.png">
+<link rel="apple-touch-icon" href="icon.png"><text y='.9em' font-size='90'>☕</text></svg>">
+<style>
+  :root {
+    --bg: #fff8f3; --card: #ffffff; --text: #2b1d14; --muted: #7a6559;
+    --accent: #e8833a; --accent-text: #ffffff; --line: #f0dfd2; --chip: #fdeee2;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c140f; --card: #271c15; --text: #f6ebe3; --muted: #bba79a;
+      --accent: #f29a57; --accent-text: #1c140f; --line: #3a2b21; --chip: #33251b;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 520px; margin: 0 auto; padding: 32px 16px 48px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 20px; }
+  .brand span { font-size: 28px; }
+  h1 { font-size: 28px; line-height: 1.2; margin: 24px 0 8px; }
+  p.lead { color: var(--muted); margin: 0 0 24px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 20px; margin: 16px 0; }
+  .card h2 { font-size: 16px; margin: 0 0 12px; }
+  .btn {
+    display: block; width: 100%; text-align: center; text-decoration: none; font-weight: 600;
+    padding: 14px 16px; border-radius: 999px; margin: 10px 0; border: 2px solid var(--accent);
+  }
+  .btn.primary { background: var(--accent); color: var(--accent-text); }
+  .btn.secondary { color: var(--accent); background: transparent; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { padding: 8px 4px; text-align: right; border-bottom: 1px solid var(--line); }
+  th:first-child, td:first-child { text-align: left; }
+  th { color: var(--muted); font-weight: 500; font-size: 14px; }
+  tr.next td { font-weight: 700; }
+  ul.history { list-style: none; padding: 0; margin: 0; }
+  ul.history li { padding: 8px 0; border-bottom: 1px solid var(--line); display: flex; gap: 10px; }
+  ul.history li:last-child { border-bottom: 0; }
+  .when { color: var(--muted); font-size: 14px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { background: var(--chip); border-radius: 999px; padding: 4px 12px; font-size: 14px; }
+  ol { padding-left: 20px; margin: 0; }
+  ol li { margin: 6px 0; }
+  .muted { color: var(--muted); font-size: 14px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <div class="brand"><img src="icon.png" alt="" width="36" height="36" style="border-radius:9px"> MyShout</div>
+
+  <section id="group" hidden>
+    <h1 id="group-name"></h1>
+    <p class="lead" id="group-sub"></p>
+    <a class="btn primary" id="open-app" href="#">Open in MyShout</a>
+    <p class="muted">Opens the app and adds this group and its history. Don't have it yet? Get it below.</p>
+    <div class="card">
+      <h2>Who's in</h2>
+      <div class="chips" id="members"></div>
+    </div>
+    <div class="card" id="tally-card">
+      <h2>Tally</h2>
+      <table id="tally"></table>
+    </div>
+    <div class="card" id="history-card">
+      <h2>Recent shouts</h2>
+      <ul class="history" id="history"></ul>
+    </div>
+  </section>
+
+  <section id="intro">
+    <h1>Whose shout is it?</h1>
+    <p class="lead">MyShout keeps track of who bought the coffee, lunch, dinner or drinks, and tells your group whose turn it is next. No account needed.</p>
+  </section>
+
+  <div class="card">
+    <h2>Get the app (Android)</h2>
+    <a class="btn primary" id="download" href="https://github.com/fogimup/myshout-download/releases/latest/download/MyShout.apk">Download MyShout</a>
+    <ol class="muted">
+      <li>Tap <b>Download MyShout</b> and open the file when it finishes.</li>
+      <li>If Android asks, allow installs from your browser.</li>
+      <li>Tap <b>Install</b>, then come back here and tap <b>Open in MyShout</b> to add your group.</li>
+    </ol>
+    <p class="muted">iPhone version coming later.</p>
+  </div>
+</main>
+
+<script>
+(() => {
+  const CATS = [
+    { label: 'Coffee', emoji: '☕' },
+    { label: 'Lunch', emoji: '🥪' },
+    { label: 'Dinner', emoji: '🍽️' },
+    { label: 'Drinks', emoji: '🍻' },
+    { label: 'Other', emoji: '🎁' },
+  ];
+
+  const data = location.hash.slice(1);
+  if (!data) return;
+
+  function b64urlToBytes(s) {
+    s = s.replace(/-/g, '+').replace(/_/g, '/');
+    while (s.length % 4) s += '=';
+    const bin = atob(s);
+    return Uint8Array.from(bin, c => c.charCodeAt(0));
+  }
+
+  async function decode(s) {
+    const stream = new Blob([b64urlToBytes(s)]).stream()
+      .pipeThrough(new DecompressionStream('deflate'));
+    return JSON.parse(await new Response(stream).text());
+  }
+
+  function el(tag, text, cls) {
+    const e = document.createElement(tag);
+    if (text != null) e.textContent = text;
+    if (cls) e.className = cls;
+    return e;
+  }
+
+  function when(mins) {
+    return new Date(mins * 60000).toLocaleString(undefined,
+      { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+  }
+
+  decode(data).then(g => {
+    if (g.v !== 1) return;
+    const members = g.m;
+    const current = members.slice(0, g.c ?? members.length);
+    const shouts = g.s || [];
+
+    document.getElementById('intro').hidden = true;
+    document.getElementById('group').hidden = false;
+    document.getElementById('group-name').textContent = g.g;
+    document.getElementById('group-sub').textContent =
+      `${current.length} people · ${shouts.length} shouts`;
+    document.getElementById('open-app').href = 'myshout://import#' + data;
+    document.title = g.g + ' · MyShout';
+
+    const chips = document.getElementById('members');
+    current.forEach(n => chips.append(el('span', n, 'chip')));
+
+    // Tally per person per category used.
+    const used = [...new Set(shouts.map(s => s[0]))].sort();
+    const counts = members.map(() => CATS.map(() => 0));
+    shouts.forEach(([c, b]) => { if (counts[b]) counts[b][c]++; });
+    const table = document.getElementById('tally');
+    if (!used.length) {
+      document.getElementById('tally-card').hidden = true;
+      document.getElementById('history-card').hidden = true;
+      return;
+    }
+    const head = el('tr');
+    head.append(el('th', 'Who'));
+    used.forEach(c => head.append(el('th', CATS[c]?.emoji ?? '🎁')));
+    head.append(el('th', 'Total'));
+    table.append(head);
+    const rows = members.map((n, i) => ({
+      n, i, total: counts[i].reduce((a, b) => a + b, 0),
+    })).filter(r => r.i < current.length || r.total > 0)
+      .sort((a, b) => a.total - b.total);
+    const fewest = Math.min(...rows.filter(r => r.i < current.length).map(r => r.total));
+    rows.forEach(r => {
+      const tr = el('tr');
+      if (r.i < current.length && r.total === fewest) tr.className = 'next';
+      tr.append(el('td', r.n + (r.i < current.length ? '' : ' (left)')));
+      used.forEach(c => tr.append(el('td', String(counts[r.i][c]))));
+      tr.append(el('td', String(r.total)));
+      table.append(tr);
+    });
+
+    const list = document.getElementById('history');
+    shouts.slice(0, 10).forEach(([c, b, t]) => {
+      const li = el('li');
+      li.append(el('span', CATS[c]?.emoji ?? '🎁'));
+      const body = el('div');
+      body.append(el('div', `${members[b]} shouted ${(CATS[c]?.label ?? 'Other').toLowerCase()}`));
+      body.append(el('div', when(t), 'when'));
+      li.append(body);
+      list.append(li);
+    });
+  }).catch(() => { /* Bad link: just show the download page. */ });
+})();
+</script>
+</body>
+</html>
