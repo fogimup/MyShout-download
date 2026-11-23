@@ -61,7 +61,7 @@
     <h1 id="group-name"></h1>
     <p class="lead" id="group-sub"></p>
     <a class="btn primary" id="open-app" href="#">Open in MyShout</a>
-    <p class="muted">Opens the app and adds this group and its history. Don't have it yet? Get it below.</p>
+    <p class="muted">Opens the app and adds or updates this group, its history and any fixes. Don't have it yet? Get it below.</p>
     <div class="card">
       <h2>Who's in</h2>
       <div class="chips" id="members"></div>
@@ -73,6 +73,10 @@
     <div class="card" id="history-card">
       <h2>Recent shouts</h2>
       <ul class="history" id="history"></ul>
+    </div>
+    <div class="card" id="changes-card" hidden>
+      <h2>Recent fixes</h2>
+      <ul class="history" id="changes"></ul>
     </div>
   </section>
 
@@ -131,8 +135,38 @@
       { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
   }
 
+  function renderChanges(g, members) {
+    const what = c => (CATS[c]?.label ?? 'Other').toLowerCase();
+    const items = [];
+    (g.s || []).forEach(([c, b, t, , e, by]) => {
+      if (e == null) return;
+      items.push({ at: e, emoji: '✏️',
+        text: `${by || 'Someone'} fixed a shout: ${members[b]} bought ${what(c)} on ${when(t)}` });
+    });
+    (g.x || []).forEach(([, c, name, t, d, by]) => {
+      items.push({ at: d, emoji: '🗑️',
+        text: `${by || 'Someone'} removed ${name}'s ${what(c)} on ${when(t)}` });
+    });
+    if (g.t != null) {
+      items.push({ at: g.t, emoji: '👥', text: `${g.b || 'Someone'} updated the group` });
+    }
+    if (!items.length) return;
+    items.sort((a, b) => b.at - a.at);
+    const list = document.getElementById('changes');
+    items.slice(0, 8).forEach(i => {
+      const li = el('li');
+      li.append(el('span', i.emoji));
+      const body = el('div');
+      body.append(el('div', i.text));
+      body.append(el('div', when(i.at), 'when'));
+      li.append(body);
+      list.append(li);
+    });
+    document.getElementById('changes-card').hidden = false;
+  }
+
   decode(data).then(g => {
-    if (g.v !== 1) return;
+    if (g.v !== 1 && g.v !== 2) return;
     const members = g.m;
     const current = members.slice(0, g.c ?? members.length);
     const shouts = g.s || [];
@@ -144,6 +178,7 @@
       `${current.length} people · ${shouts.length} shouts`;
     document.getElementById('open-app').href = 'myshout://import#' + data;
     document.title = g.g + ' · MyShout';
+    renderChanges(g, members);
 
     const chips = document.getElementById('members');
     current.forEach(n => chips.append(el('span', n, 'chip')));
@@ -178,12 +213,12 @@
     });
 
     const list = document.getElementById('history');
-    shouts.slice(0, 10).forEach(([c, b, t]) => {
+    shouts.slice(0, 10).forEach(([c, b, t, , e, by]) => {
       const li = el('li');
       li.append(el('span', CATS[c]?.emoji ?? '🎁'));
       const body = el('div');
       body.append(el('div', `${members[b]} shouted ${(CATS[c]?.label ?? 'Other').toLowerCase()}`));
-      body.append(el('div', when(t), 'when'));
+      body.append(el('div', when(t) + (e != null ? ` · fixed by ${by || 'someone'}` : ''), 'when'));
       li.append(body);
       list.append(li);
     });
